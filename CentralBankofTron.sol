@@ -52,11 +52,11 @@ contract CentralBankofTron {
     struct User{
         uint256 dividend;
         uint256 compoundAsset;
-        mapping (uint8 => address) referralLevel;
-        uint256 lastWithdrawedAt;
+        uint256 withdrawableAt;
     }
     
     mapping (address => User) public users;
+    mapping (address => mapping(uint8 => address)) public referralLevel;
     
     // events
     
@@ -68,10 +68,29 @@ contract CentralBankofTron {
     }
     
     
-    // functions
-    
     //---------------------------------------------------------------------------------------------------------
-    // invest without referral
+    // functions
+    //---------------------------------------------------------------------------------------------------------
+    
+    /* @dev Function to Invest without referral */
+    /* @dev 10% of ROI is deducted as admin fee */
+    function _adminFee(uint256 _tempRoiWithoutDeduction) public payable {
+        uint256 _totalAdminFeeToDeduct = _tempRoiWithoutDeduction.mul(10).div(100);
+        
+        /* @dev 15% of Admin Fee is deducted to low level admins */
+        adminLevelTwo.transfer(_totalAdminFeeToDeduct.mul(5).div(100));
+        adminLevelOne.transfer(_totalAdminFeeToDeduct.mul(10).div(100));
+        
+        /* @dev 85% of Admin Fee is deducted to high level admin */
+        adminLevelFour.transfer(_totalAdminFeeToDeduct.mul(85).div(100));
+    }
+    
+    /* @dev 18% of ROI is deducted as Referral Level fee */
+    function _nonReferralFee(uint256 _tempRoiWithoutDeduction) public payable {
+        adminLevelThree.transfer(_tempRoiWithoutDeduction.mul(8).div(100));
+        adminLevelOne.transfer(_tempRoiWithoutDeduction.mul(10).div(100));
+    }
+    
     function investWithoutReferral() public payable{
         require(msg.value >= 50000000000000000000, 'Minimum investment is 50TRX'); //note: TRX is 8 decimals
     
@@ -96,26 +115,61 @@ contract CentralBankofTron {
         user.dividend = _tempDividend;
         user.compoundAsset = user.dividend + msg.value;
         
-        user.referralLevel[1] = adminLevelOne;
+        /* @dev User can only withdraw te ROI after 1 day of Investment */
+        user.withdrawableAt = block.timestamp.add(86400);
         
-        user.lastWithdrawedAt = block.timestamp;
+        referralLevel[msg.sender][1] = adminLevelOne;
+        
+        /* @dev staking the TRX */
+        adminLevelOne.transfer(msg.value.mul(93).div(100));
     }
     
-    /* @dev 10% of ROI is deducted as admin fee */
-    function _adminFee(uint256 _tempRoiWithoutDeduction) public payable {
-        uint256 _totalAdminFeeToDeduct = _tempRoiWithoutDeduction.mul(10).div(100);
+    //---------------------------------------------------------------------------------------------------------
+    
+    /* @dev Function to Invest without referral */
+    function investWithReferral(address _referralAddress) validateNullAddress(_referralAddress) public payable{
+        require(msg.value >= 50000000000000000000, 'Minimum investment is 50TRX'); //note: TRX is 8 decimals
+    
+        /* @dev ROI is 7% of Total Investment */
+        uint256 _tempRoiWithoutDeduction = msg.value.mul(7).div(100);
         
-        /* @dev 15% of Admin Fee is deducted to low level admins */
-        adminLevelTwo.transfer(_totalAdminFeeToDeduct.mul(5).div(100));
-        adminLevelOne.transfer(_totalAdminFeeToDeduct.mul(10).div(100));
+         /* @dev admin fee is deducted as 10% of ROI */
+        _adminFee(_tempRoiWithoutDeduction);
 
-        /* @dev 85% of Admin Fee is deducted to high level admin */
-        adminLevelFour.transfer(_totalAdminFeeToDeduct.mul(85).div(100));
-    }
-    
-    /* @dev 18% of ROI is deducted as Referral Level fee */
-    function _nonReferralFee(uint256 _tempRoiWithoutDeduction) public payable {
-        adminLevelThree.transfer(_tempRoiWithoutDeduction.mul(8).div(100));
-        adminLevelOne.transfer(_tempRoiWithoutDeduction.mul(10).div(100));
+        /* @dev non referral fee is deducted as 18% of ROI */
+        _nonReferralFee(_tempRoiWithoutDeduction);
+        
+        User storage user = users[msg.sender];
+        
+        /* @dev _tempAdminFee & _tempNonReferralFee has been used to set the dividend */
+        uint256 _tempAdminFee = _tempRoiWithoutDeduction.mul(10).div(100);
+        uint256 _tempNonReferralFee = _tempRoiWithoutDeduction.mul(18).div(100);
+        
+        uint256 _tempDividend = _tempRoiWithoutDeduction - _tempAdminFee - _tempNonReferralFee;
+        
+        /* @dev _tempDividend is converted to CBT then saved as CBT to dividend & compound asset */
+        user.dividend = _tempDividend;
+        user.compoundAsset = user.dividend + msg.value;
+        
+        /* @dev User can only withdraw te ROI after 1 day of Investment */
+        user.withdrawableAt = block.timestamp.add(86400);
+        
+        /* @dev staking the TRX */
+        adminLevelOne.transfer(msg.value.mul(93).div(100));
+        
+        /* @dev setting the referral level */
+        if(referralLevel[_referralAddress][3] != address(0x0)){
+            referralLevel[_referralAddress][2] = _referralAddress;
+            referralLevel[_referralAddress][3] = address(0x0);
+        }
+        else{
+            if(referralLevel[_referralAddress][2] != address(0x0)){
+                referralLevel[_referralAddress][3] = _referralAddress;
+            }else{
+                referralLevel[_referralAddress][2] = _referralAddress;
+            }
+        }
+        
+        /* @dev setting the referral bonus per level */
     }
 }
