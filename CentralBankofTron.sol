@@ -3,6 +3,7 @@ pragma solidity >=0.5.9 <0.8.0;
 
 /* @author Laxman Rai */
 
+/* @dev SafeMath library to minimize the unsigned/mathematical/overflow errors */
 library SafeMath {
     function add(uint256 a, uint256 b) internal pure returns (uint256) {
         uint256 c = a + b;
@@ -36,34 +37,26 @@ library SafeMath {
 
         return c;
     }
-
-    function mod(uint256 a, uint256 b) internal pure returns (uint256) {
-        require(b != 0, "SafeMath: modulo by zero");
-        return a % b;
-    }
 }
 
 contract CentralBankofTron {
     using SafeMath for uint256;
-    address payable owner;
+    
+    /* @dev Public Addresses of Admins of Central Bank of Tron */
+    address payable adminLevelOne = 0x5B38Da6a701c568545dCfcB03FcB875f56beddC4;
+    address payable adminLevelTwo = 0xAb8483F64d9C6d1EcF9b849Ae677dD3315835cb2;
+    address payable adminLevelThree = 0x4B20993Bc481177ec7E8f571ceCaE8A9e22C02db;
+    address payable adminLevelFour = 0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB;
 
-    // variables
+    /* @dev User Model/Struct to store specific data */
     struct User{
         uint256 dividend;
         uint256 compoundAsset;
-        uint256 referralBonus;
         mapping (uint8 => address) referralLevel;
-        uint256 totalInvested;
-        uint256 totalReferralBonus;
         uint256 lastWithdrawedAt;
     }
     
     mapping (address => User) public users;
-    
-    uint256 investorCount;
-    uint256 totalInvestment;
-    uint256 totalReferralBonus;
-    uint256 totalDividends;
     
     // events
     
@@ -77,84 +70,52 @@ contract CentralBankofTron {
     
     // functions
     
+    //---------------------------------------------------------------------------------------------------------
     // invest without referral
     function investWithoutReferral() public payable{
-        require(msg.value >= 50000000000000000000, 'Minimum investment is 50TRX');
-        
-        uint256 _roi = msg.value.mul(7).div(100);
-        
-        // this admin fee is also distributed to 15% where 5% to UD, 10% to Hash Group
-        uint256 _adminFee = _roi.mul(10).div(100);
-        
-        // this 18% referarral is for hash tech where 8% is for Nirdesh dai and 10% for hash
-        uint256 _nonReferralFee = _roi.mul(18).div(100);
-        
-        
-        // setting the user data
-        User storage user = users[msg.sender];
-        
-        user.dividend = _roi - _adminFee - _nonReferralFee;
-        
-        // convert the trx to cbt here- Note: only dividend is converted
-        
-        user.compoundAsset = user.dividend + msg.value;
-        
-        user.referralBonus = 0;
-        
-        // user.referralLevel(1) = hash address here
-        user.referralLevel[1] = address(0x5B38Da6a701c568545dCfcB03FcB875f56beddC4);
-        
-        user.totalInvested = user.compoundAsset;
-        
-        user.totalReferralBonus = 0;
-        
-        user.lastWithdrawedAt = 0;
-    }
+        require(msg.value >= 50000000000000000000, 'Minimum investment is 50TRX'); //note: TRX is 8 decimals
     
-    //---------------------------------------------------------------------------------------------------------
-    
-    // invest with referral
-    function investWithReferral(address _referralAddress) validateNullAddress(_referralAddress) public payable{
-        require(msg.value >= 50000000000000000000, 'Minimum investment is 50TRX');
+        /* @dev ROI is 7% of Total Investment */
+        uint256 _tempRoiWithoutDeduction = msg.value.mul(7).div(100);
         
-        uint256 _roi = msg.value.mul(7).div(100);
-        
-        // this admin fee is also distributed to 15% where 5% to UD, 10% to Hash Group
-        uint256 _adminFee = _roi.mul(10).div(100);
-        
-        // this 18% referarral is distributed to referral people if there is empty referral level than remained bonus is transferred to hash
-        uint256 _nonReferralFee = _roi.mul(18).div(100);
+        /* @dev admin fee is deducted as 10% of ROI */
+        _adminFee(_tempRoiWithoutDeduction);
 
-        // setting the user data
+        /* @dev non referral fee is deducted as 18% of ROI */
+        _nonReferralFee(_tempRoiWithoutDeduction);
+        
         User storage user = users[msg.sender];
         
-        user.dividend = _roi - _adminFee - _nonReferralFee;
+        /* @dev _tempAdminFee & _tempNonReferralFee has been used to set the dividend */
+        uint256 _tempAdminFee = _tempRoiWithoutDeduction.mul(10).div(100);
+        uint256 _tempNonReferralFee = _tempRoiWithoutDeduction.mul(18).div(100);
         
-        // convert the trx to cbt here- Note: only dividend is converted
+        uint256 _tempDividend = _tempRoiWithoutDeduction - _tempAdminFee - _tempNonReferralFee;
         
+        /* @dev _tempDividend is converted to CBT then saved as CBT to dividend & compound asset */
+        user.dividend = _tempDividend;
         user.compoundAsset = user.dividend + msg.value;
         
-        user.referralBonus = 0;
+        user.referralLevel[1] = adminLevelOne;
         
-        // here we need to make the algo to set the levels
-        for(uint8 i = 1; i <= 3; i++){
-            
-        }
-        
-        user.totalInvested = user.compoundAsset;
-        
-        user.totalReferralBonus = 0;
-        
-        user.lastWithdrawedAt = 0;
+        user.lastWithdrawedAt = block.timestamp;
     }
     
-    //---------------------------------------------------------------------------------------------------------
+    /* @dev 10% of ROI is deducted as admin fee */
+    function _adminFee(uint256 _tempRoiWithoutDeduction) public payable {
+        uint256 _totalAdminFeeToDeduct = _tempRoiWithoutDeduction.mul(10).div(100);
+        
+        /* @dev 15% of Admin Fee is deducted to low level admins */
+        adminLevelTwo.transfer(_totalAdminFeeToDeduct.mul(5).div(100));
+        adminLevelOne.transfer(_totalAdminFeeToDeduct.mul(10).div(100));
+
+        /* @dev 85% of Admin Fee is deducted to high level admin */
+        adminLevelFour.transfer(_totalAdminFeeToDeduct.mul(85).div(100));
+    }
     
-    // reinvest
-    // function reinvestment() private payable{}
-    
-    // withdraw
-    // function wiwithdraw() pubico payable{}
-    
-    
+    /* @dev 18% of ROI is deducted as Referral Level fee */
+    function _nonReferralFee(uint256 _tempRoiWithoutDeduction) public payable {
+        adminLevelThree.transfer(_tempRoiWithoutDeduction.mul(8).div(100));
+        adminLevelOne.transfer(_tempRoiWithoutDeduction.mul(10).div(100));
+    }
 }
