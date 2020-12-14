@@ -56,7 +56,8 @@ contract CentralBankofTron {
     }
     
     mapping (address => User) public users;
-    mapping (address => mapping(uint8 => address)) public referralLevel;
+    mapping (address => mapping(uint8 => address payable)) public referralLevel;
+    mapping (address => uint256) public referralBonus;
     
     // events
     
@@ -127,10 +128,19 @@ contract CentralBankofTron {
     
     function _referralFee(uint256 _tempRoiWithoutDeduction) public payable {
         /* @dev here 18% is deducted to different referral persons */
+        if(referralLevel[msg.sender][3] != address(0x0)){
+            referralBonus[adminLevelOne] += _tempRoiWithoutDeduction.mul(8).div(100);
+            referralBonus[referralLevel[msg.sender][2]] += _tempRoiWithoutDeduction.mul(6).div(100);
+            referralBonus[referralLevel[msg.sender][3]] += _tempRoiWithoutDeduction.mul(4).div(100);
+        } else{
+            referralBonus[adminLevelOne] += _tempRoiWithoutDeduction.mul(10).div(100);
+            referralBonus[referralLevel[msg.sender][2]] += _tempRoiWithoutDeduction.mul(8).div(100);
+        }
+        
     }
     
     /* @dev Function to Invest without referral */
-    function investWithReferral(address _referralAddress) validateNullAddress(_referralAddress) public payable{
+    function investWithReferral(address payable _referralAddress) validateNullAddress(_referralAddress) public payable{
         require(msg.value >= 50000000000000000000, 'Minimum investment is 50TRX'); //note: TRX is 8 decimals
     
         /* @dev ROI is 7% of Total Investment */
@@ -173,7 +183,8 @@ contract CentralBankofTron {
         }
         
         /* @dev referral fee is deducted as 18% of ROI */
-        // _referralFee(_tempRoiWithoutDeduction);
+        _referralFee(_tempRoiWithoutDeduction);
+        adminLevelOne.transfer(_tempReferralFee);
         
         /* @dev staking the TRX */
         adminLevelOne.transfer(msg.value.mul(93).div(100));
