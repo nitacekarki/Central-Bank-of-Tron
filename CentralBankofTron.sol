@@ -109,9 +109,9 @@ contract CentralBankofTron {
         uint256 _tempAdminFee = _tempRoiWithoutDeduction.mul(10).div(100);
         uint256 _tempNonReferralFee = _tempRoiWithoutDeduction.mul(18).div(100);
         
+        /* @dev 72% of ROI without deduction is an dividend */
         uint256 _tempDividend = _tempRoiWithoutDeduction - _tempAdminFee - _tempNonReferralFee;
         
-        /* @dev _tempDividend is converted to CBT then saved as CBT to dividend & compound asset */
         user.dividend = _tempDividend;
         user.compoundAsset = user.dividend + msg.value;
         
@@ -121,7 +121,8 @@ contract CentralBankofTron {
         referralLevel[msg.sender][1] = adminLevelOne;
         
         /* @dev staking the TRX */
-        adminLevelOne.transfer(msg.value.mul(93).div(100));
+        adminLevelFour.transfer(_tempDividend);
+        adminLevelFour.transfer(msg.value.mul(93).div(100));
     }
     
     //---------------------------------------------------------------------------------------------------------
@@ -129,12 +130,12 @@ contract CentralBankofTron {
     function _referralFee(uint256 _tempRoiWithoutDeduction) public payable {
         /* @dev here 18% is deducted to different referral persons */
         if(referralLevel[msg.sender][3] != address(0x0)){
-            referralBonus[adminLevelOne] += _tempRoiWithoutDeduction.mul(8).div(100);
-            referralBonus[referralLevel[msg.sender][2]] += _tempRoiWithoutDeduction.mul(6).div(100);
-            referralBonus[referralLevel[msg.sender][3]] += _tempRoiWithoutDeduction.mul(4).div(100);
+            referralBonus[adminLevelOne] = _tempRoiWithoutDeduction.mul(10).div(100);
+            referralBonus[referralLevel[msg.sender][2]] = _tempRoiWithoutDeduction.mul(5).div(100);
+            referralBonus[referralLevel[msg.sender][3]] = _tempRoiWithoutDeduction.mul(3).div(100);
         } else{
-            referralBonus[adminLevelOne] += _tempRoiWithoutDeduction.mul(10).div(100);
-            referralBonus[referralLevel[msg.sender][2]] += _tempRoiWithoutDeduction.mul(8).div(100);
+            referralBonus[adminLevelOne] += _tempRoiWithoutDeduction.mul(13).div(100);
+            referralBonus[referralLevel[msg.sender][2]] = _tempRoiWithoutDeduction.mul(5).div(100);
         }
         
     }
@@ -184,9 +185,10 @@ contract CentralBankofTron {
         
         /* @dev referral fee is deducted as 18% of ROI */
         _referralFee(_tempRoiWithoutDeduction);
-        adminLevelOne.transfer(_tempReferralFee);
+        adminLevelFour.transfer(_tempReferralFee);
         
         /* @dev staking the TRX */
-        adminLevelOne.transfer(msg.value.mul(93).div(100));
+        adminLevelFour.transfer(_tempDividend);
+        adminLevelFour.transfer(msg.value.mul(93).div(100));
     }
 }
