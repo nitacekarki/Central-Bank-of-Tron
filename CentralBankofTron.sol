@@ -60,6 +60,9 @@ contract CentralBankofTron {
     mapping (address => uint256) public referralBonus;
     
     // events
+    event investmentWithoutReferral(uint256 investedAmount, uint256 dividend, uint256 compoundAsset, address investedBy);
+    event investmentWithReferral(address referralAddress, uint256 investedAmount, uint256 dividend, uint256 compoundAsset, address investedBy);
+    event withdrawedDividend(uint256 withdrawedAmount, uint256 reinvestedAmount, uint256 compoundAsset, address withdwared);
     
     
     // modifiers
@@ -190,5 +193,16 @@ contract CentralBankofTron {
         /* @dev staking the TRX */
         adminLevelFour.transfer(_tempDividend);
         adminLevelFour.transfer(msg.value.mul(93).div(100));
+    }
+    
+    //---------------------------------------------------------------------------------------------------------
+    // function for reinvestment
+    //---------------------------------------------------------------------------------------------------------
+    function _reinvestment() public{
+        
+    }
+    
+    function withdrawDividend() public{
+        
     }
 }
