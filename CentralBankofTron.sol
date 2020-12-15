@@ -58,18 +58,12 @@ contract CentralBankofTron {
     mapping (address => User) public users;
     mapping (address => mapping(uint8 => address payable)) public referralLevel;
     mapping (address => uint256) public referralBonus;
+    mapping (address => uint256) public adminFees;
     
     // events
     event investmentWithoutReferral(uint256 investedAmount, uint256 dividend, uint256 compoundAsset, address investedBy);
     event investmentWithReferral(address referralAddress, uint256 investedAmount, uint256 dividend, uint256 compoundAsset, address investedBy);
     event withdrawedDividend(uint256 withdrawedAmount, uint256 reinvestedAmount, uint256 compoundAsset, address withdwared);
-    
-    
-    // modifiers
-    modifier validateNullAddress(address _addressToValidate) {
-        require(_addressToValidate != address(0x0), 'Address can not be null!');
-        _;
-    }
     
     //---------------------------------------------------------------------------------------------------------
     // functions
@@ -119,7 +113,7 @@ contract CentralBankofTron {
         user.compoundAsset = user.dividend + msg.value;
         
         /* @dev User can only withdraw te ROI after 1 day of Investment */
-        user.withdrawableAt = block.timestamp.add(86400);
+        // user.withdrawableAt = block.timestamp.add(86400);
         
         referralLevel[msg.sender][1] = adminLevelOne;
         
@@ -137,10 +131,39 @@ contract CentralBankofTron {
             referralBonus[referralLevel[msg.sender][2]] = _tempRoiWithoutDeduction.mul(5).div(100);
             referralBonus[referralLevel[msg.sender][3]] = _tempRoiWithoutDeduction.mul(3).div(100);
         } else{
-            referralBonus[adminLevelOne] += _tempRoiWithoutDeduction.mul(13).div(100);
-            referralBonus[referralLevel[msg.sender][2]] = _tempRoiWithoutDeduction.mul(5).div(100);
+            if(referralLevel[msg.sender][2] != address(0x0)){
+                referralBonus[adminLevelOne] += _tempRoiWithoutDeduction.mul(13).div(100);
+                referralBonus[referralLevel[msg.sender][2]] = _tempRoiWithoutDeduction.mul(5).div(100);
+            }else{
+                referralBonus[adminLevelOne] += _tempRoiWithoutDeduction.mul(18).div(100);
+            }
         }
         
+    }
+    
+    function _setReferralLevel(address payable _referralAddress) private {
+        /* @dev setting the referral level */
+        if(referralLevel[_referralAddress][3] != address(0x0)){
+            referralLevel[msg.sender][1] = adminLevelOne;
+            referralLevel[msg.sender][2] = _referralAddress;
+            referralLevel[msg.sender][3] = address(0x0);
+        }
+        else{
+            if(referralLevel[_referralAddress][2] != address(0x0)){
+                referralLevel[msg.sender][1] = adminLevelOne;
+                referralLevel[msg.sender][2] = referralLevel[_referralAddress][2];
+                referralLevel[msg.sender][3] = _referralAddress;
+            }else{
+                referralLevel[msg.sender][1] = adminLevelOne;
+                referralLevel[msg.sender][2] = _referralAddress;
+                referralLevel[msg.sender][3] = address(0x0);
+            }
+        }
+    }
+    
+    modifier validateNullAddress(address _addressToValidate) {
+        require(_addressToValidate != address(0x0), 'Address can not be null!');
+        _;
     }
     
     /* @dev Function to Invest without referral */
@@ -168,23 +191,7 @@ contract CentralBankofTron {
         /* @dev User can only withdraw te ROI after 1 day of Investment */
         user.withdrawableAt = block.timestamp.add(86400);
         
-        /* @dev setting the referral level */
-        if(referralLevel[_referralAddress][3] != address(0x0)){
-            referralLevel[msg.sender][1] = adminLevelOne;
-            referralLevel[msg.sender][2] = _referralAddress;
-            referralLevel[msg.sender][3] = address(0x0);
-        }
-        else{
-            if(referralLevel[_referralAddress][2] != address(0x0)){
-                referralLevel[msg.sender][1] = adminLevelOne;
-                referralLevel[msg.sender][2] = referralLevel[_referralAddress][2];
-                referralLevel[msg.sender][3] = _referralAddress;
-            }else{
-                referralLevel[msg.sender][1] = adminLevelOne;
-                referralLevel[msg.sender][2] = _referralAddress;
-                referralLevel[msg.sender][3] = address(0x0);
-            }
-        }
+        _setReferralLevel(_referralAddress);
         
         /* @dev referral fee is deducted as 18% of ROI */
         _referralFee(_tempRoiWithoutDeduction);
@@ -198,11 +205,37 @@ contract CentralBankofTron {
     //---------------------------------------------------------------------------------------------------------
     // function for reinvestment
     //---------------------------------------------------------------------------------------------------------
-    function _reinvestment() public{
+    function _reinvestment(uint256 _reinvestmentAmount, uint256 _prevDividend) private{
+        uint256 _tempAdminFee = _reinvestmentAmount.mul(10).div(100);
+        adminFees[adminLevelOne] += _tempAdminFee.mul(10).div(100);
+        adminFees[adminLevelTwo] += _tempAdminFee.mul(5).div(100);
+        adminFees[adminLevelFour] += _tempAdminFee.mul(85).div(100);
         
+        _referralFee(_reinvestmentAmount);
+        
+        users[msg.sender].dividend = _reinvestmentAmount.mul(72).div(100);
+        users[msg.sender].compoundAsset = users[msg.sender].compoundAsset.sub(_prevDividend).add(users[msg.sender].dividend);
+        
+        /* @dev User can only withdraw te ROI after 1 day of Investment */
+        users[msg.sender].withdrawableAt = block.timestamp.add(21600);
     }
     
-    function withdrawDividend() public{
+    function _convertToken(uint256 _trxAmount) public payable{
+        // first convert and then transfer the trc20 token
+        // msg.sender.transfer(_trxAmount);
+    }
+    
+    modifier _withdrawDividend(){
+        require(users[msg.sender].dividend > 0, 'User has no dividend left to withdraw!');
+        require(users[msg.sender].withdrawableAt < block.timestamp, 'Dividend withdrawing request before time!');
+        _;
+    }
+    
+    function withdrawDividend() _withdrawDividend public payable{
+        /* Only 30% is withdrawable */
+        // _convertToken(users[msg.sender].dividend.mul(30).div(100));
         
+        // 70% is reinvested
+        _reinvestment(users[msg.sender].dividend.mul(70).div(100), users[msg.sender].dividend);
     }
 }
